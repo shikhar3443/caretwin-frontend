@@ -46,7 +46,7 @@ export default function SignupPage() {
     setLoading(true);
     try {
       // 1. Register with FastAPI backend
-      await registerUser(form.email.trim(), form.password, form.name.trim());
+      await registerUser(form.name.trim(), form.email.trim(), form.password);
       // 2. Automatically log in to get JWT token
       await loginUser(form.email.trim(), form.password);
 

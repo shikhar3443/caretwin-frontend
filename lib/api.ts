@@ -40,7 +40,14 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: "An error occurred" }));
-      throw new Error(errorData.detail || `Request failed with status ${response.status}`);
+      const detail = errorData.detail;
+      // FastAPI 422 returns detail as an array of validation error objects
+      const message = Array.isArray(detail)
+        ? detail.map((d: any) => d.msg || JSON.stringify(d)).join("; ")
+        : typeof detail === "string"
+        ? detail
+        : `Request failed with status ${response.status}`;
+      throw new Error(message);
     }
 
     return response.json();
