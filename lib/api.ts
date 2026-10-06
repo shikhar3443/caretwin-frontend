@@ -293,3 +293,47 @@ export async function generateDoctorShare(familyMemberId: number, durationHours:
     body: JSON.stringify({ family_member_id: familyMemberId, duration_hours: durationHours }),
   });
 }
+
+// ----------------------------------------------------
+// 🚨 Emergency QR APIs
+// ----------------------------------------------------
+
+export interface EmergencyProfileData {
+  blood_group?: string;
+  allergies?: string;
+  chronic_conditions?: string;
+  current_medications?: string;
+  implants_devices?: string;
+  is_pregnant?: boolean;
+  organ_donor?: boolean;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
+  notes?: string;
+}
+
+export async function upsertEmergencyProfile(memberId: number, data: EmergencyProfileData) {
+  return apiFetch(`/emergency/${memberId}/profile`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function getEmergencyProfile(memberId: number) {
+  return apiFetch(`/emergency/${memberId}/profile`);
+}
+
+export async function generateEmergencyQR(memberId: number) {
+  return apiFetch<{ emergency_url: string; qr_png_base64: string }>(`/emergency/${memberId}/qr`, {
+    method: "POST",
+  });
+}
+
+export async function revokeEmergencyQR(memberId: number) {
+  return apiFetch(`/emergency/${memberId}/qr`, { method: "DELETE" });
+}
+
+export async function getEmergencyAccessLog(memberId: number) {
+  return apiFetch(`/emergency/${memberId}/access-log`);
+}
+
