@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   LayoutDashboard,
   FileText,
@@ -11,241 +12,140 @@ import {
   Settings,
   HelpCircle,
   Plus,
-  Search,
-  Bell,
-  User,
-  ChevronDown,
-  LogOut,
+  X,
+  Users,
+  QrCode,
+  ClipboardList,
 } from "lucide-react";
 
 import DashboardFooter from "./DashboardFooter";
-import { getCurrentUser, logout } from "@/lib/api";
+import Header from "./Header";
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+const navItems = [
+  { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Medical Records", href: "/dashboard/medical-records", icon: FileText },
+  { name: "Report Summary", href: "/dashboard/reports", icon: ClipboardList },
+  { name: "Family", href: "/dashboard/family", icon: Users },
+  { name: "Emergency QR", href: "/dashboard/emergency", icon: QrCode },
+  { name: "AI Symptom Checker", href: "/dashboard/symptom-checker", icon: Activity },
+  { name: "AI Chat", href: "/dashboard/ai-chat", icon: MessageCircle },
+];
+
+const bottomItems = [
+  { name: "Settings", href: "/dashboard/settings", icon: Settings },
+  { name: "Support", href: "/dashboard/support", icon: HelpCircle },
+];
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [currentUser, setCurrentUser] = useState<{ id: number; full_name: string; email: string } | null>(null);
-  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const close = () => setSidebarOpen(false);
 
-  useEffect(() => {
-    async function loadUser() {
-      try {
-        const user = await getCurrentUser();
-        setCurrentUser(user);
-      } catch (err) {
-        console.error("Failed to load user profile:", err);
-      }
-    }
-    loadUser();
-  }, []);
+  const isActive = (href: string) =>
+    pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
 
-  const navItems = [
-    {
-      name: "Overview",
-      href: "/dashboard",
-      icon: LayoutDashboard,
-    },
-    {
-      name: "Medical Records",
-      href: "/dashboard/medical-records",
-      icon: FileText,
-    },
-    {
-      name: "AI Symptom Checker",
-      href: "/dashboard/symptom-checker",
-      icon: Activity,
-    },
-    {
-      name: "AI Consultation",
-      href: "/dashboard/ai-chat",
-      icon: MessageCircle,
-    },
-    {
-      name: "Settings",
-      href: "/dashboard/settings",
-      icon: Settings,
-    },
-    {
-      name: "Help & Support",
-      href: "/dashboard/support",
-      icon: HelpCircle,
-    },
-  ];
+  const NavLink = ({ item }: { item: (typeof navItems)[number] }) => {
+    const Icon = item.icon;
+    const active = isActive(item.href);
+    return (
+      <Link
+        href={item.href}
+        onClick={close}
+        aria-current={active ? "page" : undefined}
+        className={`relative flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm transition-colors ${
+          active ? "font-semibold text-mint-deep" : "text-body hover:bg-[#f3f4f6]"
+        }`}
+      >
+        {active && (
+          <motion.span
+            layoutId="nav-pill"
+            className="absolute inset-0 rounded-lg bg-mint"
+            transition={{ type: "spring", stiffness: 420, damping: 34 }}
+          />
+        )}
+        <Icon size={17} strokeWidth={1.8} className="relative" />
+        <span className="relative">{item.name}</span>
+      </Link>
+    );
+  };
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc]">
+    <div className="flex min-h-dvh bg-canvas">
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.button
+            type="button"
+            aria-label="Close sidebar"
+            onClick={close}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="no-print fixed inset-0 z-40 bg-black/30 md:hidden"
+          />
+        )}
+      </AnimatePresence>
 
-      {/* ================= SIDEBAR ================= */}
-      <aside className="fixed left-0 top-0 z-30 flex h-screen w-[230px] flex-col justify-between border-r border-[#e5e7eb] bg-white px-5 py-6">
-
-        {/* Top */}
-        <div>
-
-          {/* Logo */}
-          <div className="mb-8 flex items-center gap-2.5 px-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#0878b8] text-white">
-              <Activity size={18} />
+      <aside
+        className={`no-print fixed left-0 top-0 z-50 flex h-dvh w-[280px] shrink-0 flex-col border-r border-line bg-white transition-transform duration-300 md:w-[240px] md:translate-x-0 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex h-[72px] shrink-0 items-center justify-between border-b border-[#edf0f5] px-6">
+          <Link href="/dashboard" className="flex items-center gap-3" onClick={close}>
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand text-white">
+              <span className="text-lg font-bold">C</span>
             </div>
-
             <div>
-              <h1 className="text-sm font-bold text-[#111827]">
-                CareTwin AI
-              </h1>
-
-              <p className="text-[10px] text-[#6b7280]">
-                Healthcare Platform
-              </p>
+              <p className="text-[15px] font-bold leading-tight text-ink">CareTwin</p>
+              <p className="text-[10px] font-semibold tracking-widest text-[#8b95a7]">PERSONAL HEALTH</p>
             </div>
-          </div>
-
-
-          {/* Navigation */}
-          <nav className="space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-medium transition ${
-                    isActive
-                      ? "bg-[#eef7fc] text-[#0878b8]"
-                      : "text-[#6b7280] hover:bg-[#f3f4f6] hover:text-[#111827]"
-                  }`}
-                >
-                  <Icon size={16} />
-                  {item.name}
-                </Link>
-              );
-            })}
-          </nav>
-
+          </Link>
+          <button
+            type="button"
+            onClick={close}
+            aria-label="Close sidebar"
+            className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 md:hidden"
+          >
+            <X size={20} />
+          </button>
         </div>
 
+        <nav className="flex-1 overflow-y-auto px-4 py-5" aria-label="Main">
+          <div className="space-y-1">
+            {navItems.map((item) => (
+              <NavLink key={item.href} item={item} />
+            ))}
+          </div>
+          <div className="mt-8 space-y-1 border-t border-[#edf0f5] pt-5">
+            {bottomItems.map((item) => (
+              <NavLink key={item.href} item={item} />
+            ))}
+          </div>
+        </nav>
 
-        {/* Bottom Box */}
-        <div className="rounded-xl border border-[#e5e7eb] bg-[#f9fafb] p-3 text-center">
-          <p className="text-[11px] font-semibold text-[#111827]">
-            Need Doctor Access?
-          </p>
-
-          <p className="mt-0.5 text-[9px] text-[#6b7280]">
-            Generate a temporary share code for your physician.
-          </p>
-
+        <div className="shrink-0 px-4 pb-5">
           <Link
-            href="/dashboard/medical-records"
-            className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#0878b8] py-2 text-[10px] font-semibold text-white transition hover:bg-[#065d8f]"
+            href="/dashboard/medical-records?add=1"
+            onClick={close}
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark active:scale-[0.98]"
           >
-            <Plus size={12} />
-            Share Records
+            <Plus size={16} />
+            Add Record
           </Link>
         </div>
-
       </aside>
 
-
-      {/* ================= RIGHT WRAPPER ================= */}
-      <div className="ml-[230px] flex h-screen min-w-0 flex-1 flex-col">
-
-        {/* ================= HEADER ================= */}
-        <header className="flex h-[72px] shrink-0 items-center justify-between border-b border-[#e5e7eb] bg-white px-8">
-
-          {/* Search */}
-          <div className="relative w-[310px]">
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9ca3af]"
-            />
-
-            <input
-              type="text"
-              placeholder="Search health records"
-              className="h-9 w-full rounded-lg border border-[#e5e7eb] bg-[#fafafa] pl-9 pr-4 text-xs outline-none focus:border-[#0878b8]"
-            />
-          </div>
-
-          {/* Right */}
-          <div className="flex items-center gap-5">
-
-            <button className="relative text-[#6b7280] hover:text-[#111827]">
-              <Bell size={18} />
-              <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-red-500" />
-            </button>
-
-            <div className="h-7 w-px bg-[#e5e7eb]" />
-
-            {/* User Profile with Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                className="flex items-center gap-2 rounded-lg p-1.5 hover:bg-slate-50 transition"
-              >
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#dff7ed] text-[#0878b8]">
-                  <User size={16} />
-                </div>
-
-                <div className="hidden text-left sm:block">
-                  <p className="text-xs font-semibold text-[#111827]">
-                    {currentUser?.full_name || "Patient"}
-                  </p>
-
-                  <p className="text-[10px] text-[#9ca3af]">
-                    Patient ID: CT-{currentUser?.id ? 1000 + currentUser.id : "2048"}
-                  </p>
-                </div>
-
-                <ChevronDown size={14} className="text-gray-400" />
-              </button>
-
-              {userDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 rounded-xl bg-white p-2 shadow-xl border border-slate-100 z-50">
-                  <div className="px-3 py-2 border-b border-slate-100 mb-1">
-                    <p className="text-xs font-bold text-slate-800">{currentUser?.full_name}</p>
-                    <p className="text-[10px] text-slate-400 truncate">{currentUser?.email}</p>
-                  </div>
-
-                  <Link
-                    href="/dashboard/settings"
-                    onClick={() => setUserDropdownOpen(false)}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 transition"
-                  >
-                    <Settings size={14} />
-                    Account Settings
-                  </Link>
-
-                  <button
-                    onClick={() => logout()}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs text-red-600 hover:bg-red-50 transition"
-                  >
-                    <LogOut size={14} />
-                    Sign Out
-                  </button>
-                </div>
-              )}
-            </div>
-
-          </div>
-
-        </header>
-
-
-        {/* ================= SCROLLABLE CONTENT ================= */}
-        <main className="flex-1 overflow-y-auto px-8 py-7">
+      <div className="ml-0 flex min-h-dvh min-w-0 flex-1 flex-col md:ml-[240px]">
+        <div className="no-print shrink-0">
+          <Header onMenuClick={() => setSidebarOpen(true)} />
+        </div>
+        <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-7">
           {children}
         </main>
-
-
-        {/* ================= FOOTER ================= */}
-        <DashboardFooter />
-
+        <div className="no-print">
+          <DashboardFooter />
+        </div>
       </div>
-
     </div>
   );
 }

@@ -1,52 +1,28 @@
 import Link from "next/link";
+import { SITE } from "@/lib/site";
+
+const links = [
+  { href: "/Legal/Privacy_Policy", label: "Privacy Policy" },
+  { href: "/Legal/Terms_of_Service", label: "Terms of Service" },
+  { href: "/Legal/HIPAA_Compliance", label: "HIPAA Compliance" },
+  { href: "/dashboard/support", label: "Contact" },
+];
 
 export default function DashboardFooter() {
   return (
-    <footer className="border-t border-[#e5e7eb] bg-[#DBDFFF] px-8 py-5">
+    <footer className="border-t border-line bg-lavender px-4 py-5 sm:px-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
-        {/* Left */}
         <div>
-          <p className="text-[12px] font-bold text-[#0878b8]">
-            CareTwin AI
-          </p>
-
-          <p className="mt-1 text-[9px] text-[#9ca3af]">
-            © 2026 CareTwin AI · Human-Centric Intelligence.
-          </p>
+          <p className="text-sm font-bold text-brand">{SITE.name}</p>
+          <p className="mt-0.5 text-xs text-mute">© {SITE.year} {SITE.name}. Human-centric intelligence.</p>
         </div>
-
-        {/* Right */}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <Link
-            href="/privacy"
-            className="text-[9px] text-[#6b7280] transition hover:text-[#0878b8]"
-          >
-            Privacy Policy
-          </Link>
-
-          <Link
-            href="/terms"
-            className="text-[9px] text-[#6b7280] transition hover:text-[#0878b8]"
-          >
-            Terms of Service
-          </Link>
-
-          <Link
-            href="/hipaa"
-            className="text-[9px] text-[#6b7280] transition hover:text-[#0878b8]"
-          >
-            HIPAA Compliance
-          </Link>
-
-          <Link
-            href="/contact"
-            className="text-[9px] text-[#6b7280] transition hover:text-[#0878b8]"
-          >
-            Contact
-          </Link>
+          {links.map((l) => (
+            <Link key={l.href} href={l.href} className="text-xs text-body transition hover:text-brand">
+              {l.label}
+            </Link>
+          ))}
         </div>
-
       </div>
     </footer>
   );

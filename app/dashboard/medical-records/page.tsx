@@ -1,309 +1,272 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
+import { LayoutGrid, Rows3, Search, FileSearch } from "lucide-react";
+
 import MedicalRecordsHeader from "@/components/Dashboard/MedicalRecords/MedicalRecordsHeader";
 import RecordStats from "@/components/Dashboard/MedicalRecords/RecordStats";
 import MedicalRecordCard from "@/components/Dashboard/MedicalRecords/MedicalRecordCard";
 import AddRecordCard from "@/components/Dashboard/MedicalRecords/AddRecordCard";
-import {
-  getMedicalRecords,
-  MedicalRecord,
-  getCurrentUser,
-  deleteMedicalRecord,
-  downloadMedicalRecord,
-  viewMedicalRecord,
-  getTrendAlerts,
-  getFamilyMembers,
-  uploadMedicalRecord,
-  processRecordOCR,
-} from "@/lib/api";
-import { X, Upload } from "lucide-react";
+import AddRecordModal from "@/components/Dashboard/MedicalRecords/AddRecordModal";
+import RecordDetailModal from "@/components/Dashboard/MedicalRecords/RecordDetailModal";
+import RecordTimeline from "@/components/Dashboard/MedicalRecords/RecordTimeline";
+import TimelineStrip from "@/components/Dashboard/MedicalRecords/TimelineStrip";
+import MemberTabs from "@/components/shared/MemberTabs";
+import PeriodPicker from "@/components/shared/PeriodPicker";
+import ConfirmModal from "@/components/shared/ConfirmModal";
+import { useToast } from "@/components/ui/Toast";
+import { Stagger, StaggerItem } from "@/components/ui/Motion";
+import { inputCls, btnPrimary } from "@/components/ui/Field";
+import { RECORD_TYPES } from "@/lib/data";
+import { ALL_ID, useCareData } from "@/lib/useCareData";
+import { formatDate, inPeriod, periodLabel, toISO, type Period } from "@/lib/dates";
+import { downloadText, slug } from "@/lib/download";
+import type { MedicalRecord } from "@/lib/types";
+import { downloadMedicalRecord, deleteMedicalRecord } from "@/lib/api";
 
 export default function MedicalRecordsPage() {
-  const [records, setRecords] = useState<MedicalRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [patientName, setPatientName] = useState("Patient");
-  const [followUpsCount, setFollowUpsCount] = useState(0);
+  return (
+    <Suspense fallback={<div className="ct-skeleton mx-auto h-64 max-w-[1200px] rounded-2xl" />}>
+      <RecordsView />
+    </Suspense>
+  );
+}
 
-  // Filters & Modals
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState("All");
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+function RecordsView() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const toast = useToast();
+  const { hydrated, now, members, memberById, records, setRecords, scopedRecords, activeId } = useCareData();
 
-  // Upload Form State
-  const [uploadTitle, setUploadTitle] = useState("");
-  const [uploadDocType, setUploadDocType] = useState("Prescription");
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadLoading, setUploadLoading] = useState(false);
-  const [uploadStatusMsg, setUploadStatusMsg] = useState<string | null>(null);
+  // Search text and the add dialog live in the URL, so header search and "Add record" links work from anywhere.
+  const query = params.get("q") ?? "";
+  const addOpen = params.get("add") === "1";
 
-  async function loadRecords() {
-    try {
-      setLoading(true);
-      const [u, fetchedRecords] = await Promise.all([
-        getCurrentUser().catch(() => null),
-        getMedicalRecords().catch(() => []),
-      ]);
-      if (u) {
-        setPatientName(u.full_name);
-        try {
-          const members = await getFamilyMembers();
-          const selfId = members[0]?.id || 1;
-          const alerts = await getTrendAlerts(selfId);
-          setFollowUpsCount(alerts.length);
-        } catch {
-          setFollowUpsCount(0);
-        }
+  const setParam = (patch: Record<string, string | null>) => {
+    const next = new URLSearchParams(params.toString());
+    Object.entries(patch).forEach(([k, v]) => (v ? next.set(k, v) : next.delete(k)));
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  };
+
+  const [period, setPeriod] = useState<Period>({ id: "6m" });
+  const [type, setType] = useState("All");
+  const [view, setView] = useState<"grid" | "timeline">("grid");
+  const [detail, setDetail] = useState<MedicalRecord | null>(null);
+  const [toDelete, setToDelete] = useState<MedicalRecord | null>(null);
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return scopedRecords
+      .filter((r) => inPeriod(r.date, period, now))
+      .filter((r) => type === "All" || r.type === type)
+      .filter(
+        (r) =>
+          !q ||
+          `${r.title} ${r.description} ${r.doctor} ${r.type} ${memberById.get(r.memberId)?.name ?? ""}`
+            .toLowerCase()
+            .includes(q),
+      )
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [scopedRecords, period, type, query, now, memberById]);
+
+  const download = async (r: MedicalRecord) => {
+    if (r.backendId) {
+      try {
+        await downloadMedicalRecord(r.backendId, r.fileName || `${slug(r.title)}.pdf`);
+        toast("Report downloaded from Record Locker");
+        return;
+      } catch (err) {
+        console.warn("Backend download failed, falling back to text summary:", err);
       }
-      setRecords(fetchedRecords);
-    } catch (err) {
-      console.error("Failed to load records:", err);
-    } finally {
-      setLoading(false);
     }
-  }
-
-  useEffect(() => {
-    loadRecords();
-  }, []);
-
-  // Compute Last Update String
-  const computeLastUpdate = () => {
-    if (records.length === 0) return "No records yet";
-    const sorted = [...records].sort(
-      (a, b) => new Date(b.upload_date).getTime() - new Date(a.upload_date).getTime()
-    );
-    const diffHours = Math.floor(
-      (new Date().getTime() - new Date(sorted[0].upload_date).getTime()) / (1000 * 60 * 60)
-    );
-    if (diffHours < 1) return "Just Now";
-    if (diffHours < 24) return `${diffHours} Hours Ago`;
-    const diffDays = Math.floor(diffHours / 24);
-    if (diffDays === 1) return "Yesterday";
-    return `${diffDays} Days Ago`;
+    const m = memberById.get(r.memberId);
+    const lines = [
+      r.title,
+      `${r.type} | ${formatDate(r.date)}`,
+      `Patient: ${m?.name ?? "Unknown"}`,
+      `Doctor: ${r.doctor || "Not added"}`,
+      "",
+      r.description,
+      ...(r.metrics?.length ? ["", "Key results:", ...r.metrics.map((x) => `- ${x.label}: ${x.value} (${x.flag})`)] : []),
+      ...(r.analysis ? ["", `AI insight: ${r.analysis}`] : []),
+    ];
+    downloadText(`${slug(r.title)}.txt`, lines.join("\n"));
+    toast("Summary downloaded");
   };
 
-  // Filter records by category
-  const filteredRecords = records.filter((r) => {
-    if (selectedCategory === "All") return true;
-    return r.document_type.toLowerCase() === selectedCategory.toLowerCase();
-  });
-
-  // Action Handlers
-  const handleView = async (recordId: number) => {
-    try {
-      await viewMedicalRecord(recordId);
-    } catch (err: any) {
-      alert(err.message || "Unable to open document");
-    }
-  };
-
-  const handleDownload = async (recordId: number, title: string) => {
-    try {
-      await downloadMedicalRecord(recordId, `${title}.pdf`);
-    } catch (err: any) {
-      alert(err.message || "Failed to download document");
-    }
-  };
-
-  const handleDelete = async (recordId: number, title: string) => {
-    if (!confirm(`Are you sure you want to delete "${title}"?`)) return;
-    try {
-      await deleteMedicalRecord(recordId);
-      setRecords((prev) => prev.filter((r) => r.id !== recordId));
-    } catch (err: any) {
-      alert(err.message || "Failed to delete document");
-    }
-  };
-
-  // Header Upload Modal Submit
-  const handleModalUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!uploadTitle || !uploadFile) {
-      alert("Please provide a title and select a file.");
-      return;
-    }
-
-    try {
-      setUploadLoading(true);
-      setUploadStatusMsg("Uploading document to Record Locker...");
-      const familyMembers = await getFamilyMembers();
-      const selfId = familyMembers[0]?.id || 1;
-
-      const record = await uploadMedicalRecord(selfId, uploadTitle, uploadDocType, uploadFile);
-      setUploadStatusMsg("Running OCR & Medical NLP extraction...");
-      await processRecordOCR(record.id);
-
-      setUploadStatusMsg("Document uploaded & processed successfully!");
-      setTimeout(() => {
-        setIsUploadModalOpen(false);
-        setUploadTitle("");
-        setUploadFile(null);
-        setUploadStatusMsg(null);
-        loadRecords();
-      }, 1000);
-    } catch (err: any) {
-      alert(err.message || "Failed to upload medical record.");
-    } finally {
-      setUploadLoading(false);
-    }
-  };
+  const showMember = activeId === ALL_ID;
+  const today = toISO(new Date(now));
+  const scopeName = activeId === ALL_ID ? "everyone" : (memberById.get(activeId)?.name ?? "");
 
   return (
-    <div className="mx-auto w-full max-w-[1200px] space-y-5">
+    <Stagger className="mx-auto w-full max-w-[1200px] space-y-5">
+      <StaggerItem>
+        <MedicalRecordsHeader onAdd={() => setParam({ add: "1" })} />
+      </StaggerItem>
 
-      {/* Page Header with working Actions */}
-      <MedicalRecordsHeader
-        onUploadClick={() => setIsUploadModalOpen(true)}
-        onFilterToggle={() => setShowFilters(!showFilters)}
-        isFilterActive={showFilters || selectedCategory !== "All"}
-      />
+      <StaggerItem>
+        <MemberTabs />
+      </StaggerItem>
 
-      {/* Category Filter Pills (When Filters button is toggled) */}
-      {showFilters && (
-        <div className="flex flex-wrap items-center gap-2 p-3 bg-white border border-[#e5e7eb] rounded-xl">
-          <span className="text-xs font-semibold text-slate-500 mr-2">Filter By:</span>
-          {["All", "Prescription", "Lab Report", "Discharge Summary", "Radiology"].map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1 text-xs font-medium rounded-lg transition ${
-                selectedCategory === cat
-                  ? "bg-[#0878b8] text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
+      <StaggerItem>
+        <RecordStats records={scopedRecords} now={now} />
+      </StaggerItem>
+
+      {/* Time limiter */}
+      <StaggerItem>
+        <section className="space-y-3" aria-label="Time range">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-[15px] font-bold text-ink">Show records from the past</h2>
+              <p className="text-[13px] text-mute">
+                {hydrated ? periodLabel(period, now) : ""}
+              </p>
+            </div>
+          </div>
+          <PeriodPicker idPrefix="records" value={period} onChange={setPeriod} />
+          <TimelineStrip records={scopedRecords} period={period} now={now} />
+        </section>
+      </StaggerItem>
+
+      {/* Filters */}
+      <StaggerItem>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setParam({ q: e.target.value || null })}
+              aria-label="Search records"
+              placeholder="Search by title, doctor or type"
+              className={`${inputCls} pl-10`}
+            />
+          </div>
+          <select value={type} onChange={(e) => setType(e.target.value)} aria-label="Filter by type" className={`${inputCls} sm:w-48`}>
+            <option>All</option>
+            {RECORD_TYPES.map((t) => (
+              <option key={t}>{t}</option>
+            ))}
+          </select>
+          <div role="group" aria-label="Layout" className="flex rounded-lg border border-[#dfe3ea] bg-white p-1">
+            {([
+              ["grid", "Cards", LayoutGrid],
+              ["timeline", "Timeline", Rows3],
+            ] as const).map(([id, label, Icon]) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={view === id}
+                onClick={() => setView(id)}
+                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[13px] font-semibold transition ${
+                  view === id ? "bg-brand text-white" : "text-body hover:text-ink"
+                }`}
+              >
+                <Icon size={15} />
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-      )}
+      </StaggerItem>
 
-      {/* Dynamic Statistics Bar */}
-      <RecordStats
-        totalDocs={records.length}
-        aiAnalyzed={records.filter((r) => r.ocr_status === "COMPLETED").length}
-        lastUpdate={computeLastUpdate()}
-        followUps={followUpsCount}
-      />
+      <StaggerItem>
+        <p className="text-[13px] text-mute" aria-live="polite">
+          {hydrated ? `${visible.length} record${visible.length === 1 ? "" : "s"} for ${scopeName}` : ""}
+        </p>
 
-      {/* Medical Records Grid */}
-      <section className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-
-        <AddRecordCard onRecordAdded={loadRecords} />
-
-        {filteredRecords.map((rec) => (
-          <MedicalRecordCard
-            key={rec.id}
-            id={rec.id}
-            type={rec.document_type}
-            title={rec.title}
-            description={`Digitized by CareTwin Smart Record Locker. OCR Status: ${rec.ocr_status}`}
-            date={new Date(rec.upload_date).toLocaleDateString(undefined, {
-              month: "short",
-              day: "numeric",
-              year: "numeric"
-            })}
-            doctor={`Patient: ${patientName}`}
-            analyzed={rec.ocr_status === "COMPLETED"}
-            analysis="Clinical fields and time-series metrics extracted and synchronized with Health Timeline."
-            onView={() => handleView(rec.id)}
-            onDownload={() => handleDownload(rec.id, rec.title)}
-            onDelete={() => handleDelete(rec.id, rec.title)}
-          />
-        ))}
-
-        {filteredRecords.length === 0 && !loading && (
-          <div className="flex min-h-[170px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white p-6 text-center text-slate-400">
-            <p className="text-xs font-medium">No documents match "{selectedCategory}"</p>
-            <p className="text-[10px] mt-1">Try selecting another filter or upload a new record.</p>
+        {!hydrated ? (
+          <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="ct-skeleton h-60 rounded-xl" />
+            ))}
+          </div>
+        ) : view === "timeline" ? (
+          <div className="mt-4">
+            {visible.length ? (
+              <RecordTimeline records={visible} memberById={memberById} showMember={showMember} onView={setDetail} />
+            ) : (
+              <EmptyState onAdd={() => setParam({ add: "1" })} />
+            )}
+          </div>
+        ) : (
+          <section className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <AnimatePresence mode="popLayout">
+              {visible.map((r) => (
+                <motion.div
+                  key={r.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.96 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.94 }}
+                  transition={{ duration: 0.25 }}
+                >
+                  <MedicalRecordCard
+                    record={r}
+                    member={memberById.get(r.memberId)}
+                    showMember={showMember}
+                    onView={() => setDetail(r)}
+                    onDownload={() => download(r)}
+                    onDelete={() => setToDelete(r)}
+                  />
+                </motion.div>
+              ))}
+            </AnimatePresence>
+            <AddRecordCard onClick={() => setParam({ add: "1" })} />
+          </section>
+        )}
+        {hydrated && view === "grid" && visible.length === 0 && (
+          <div className="mt-4">
+            <EmptyState onAdd={() => setParam({ add: "1" })} />
           </div>
         )}
+      </StaggerItem>
 
-      </section>
+      <AddRecordModal
+        open={addOpen}
+        onClose={() => setParam({ add: null })}
+        members={members}
+        defaultMemberId={activeId === ALL_ID ? members[0].id : activeId}
+        today={today}
+        onSave={(r) => {
+          setRecords((prev) => [r, ...prev]);
+          toast("Record added");
+        }}
+      />
 
-      {/* Global Upload Modal triggered from Top Right "Upload New Report" button */}
-      {isUploadModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl relative">
-            <button
-              type="button"
-              onClick={() => setIsUploadModalOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
-            >
-              <X size={20} />
-            </button>
+      <RecordDetailModal record={detail} member={detail ? memberById.get(detail.memberId) : undefined} onClose={() => setDetail(null)} onDownload={download} />
 
-            <h2 className="text-xl font-bold text-slate-800 mb-1">
-              Upload Medical Report
-            </h2>
-            <p className="text-xs text-slate-500 mb-5">
-              Securely store in CareTwin Record Locker and parse clinical metrics via OCR.
-            </p>
+      <ConfirmModal
+        open={!!toDelete}
+        onClose={() => setToDelete(null)}
+        title="Delete this record?"
+        message={`"${toDelete?.title ?? ""}" will be removed from this device. This cannot be undone.`}
+        onConfirm={async () => {
+          if (!toDelete) return;
+          if (toDelete.backendId) {
+            await deleteMedicalRecord(toDelete.backendId).catch(() => null);
+          }
+          setRecords(records.filter((r) => r.id !== toDelete.id));
+          toast("Record deleted", "info");
+        }}
+      />
+    </Stagger>
+  );
+}
 
-            <form onSubmit={handleModalUpload} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Document Title
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Max Healthcare Lab Report"
-                  value={uploadTitle}
-                  onChange={(e) => setUploadTitle(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl p-2.5 text-sm outline-none focus:border-cyan-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Document Category
-                </label>
-                <select
-                  value={uploadDocType}
-                  onChange={(e) => setUploadDocType(e.target.value)}
-                  className="w-full border border-slate-300 rounded-xl p-2.5 text-sm outline-none focus:border-cyan-500"
-                >
-                  <option value="Prescription">Prescription</option>
-                  <option value="Lab Report">Lab Report</option>
-                  <option value="Discharge Summary">Discharge Summary</option>
-                  <option value="Radiology">Radiology / Imaging</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Select File (PDF, PNG, JPG)
-                </label>
-                <input
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                  className="w-full text-xs text-slate-500 border border-slate-300 rounded-xl p-2 cursor-pointer"
-                  required
-                />
-              </div>
-
-              {uploadStatusMsg && (
-                <div className="p-2.5 bg-cyan-50 text-cyan-700 rounded-xl text-xs font-medium border border-cyan-200">
-                  {uploadStatusMsg}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={uploadLoading}
-                className="w-full bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white py-3 rounded-xl font-semibold text-sm transition flex items-center justify-center gap-2"
-              >
-                <Upload size={16} />
-                {uploadLoading ? "Uploading & Analyzing..." : "Upload & Analyze"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
+function EmptyState({ onAdd }: { onAdd: () => void }) {
+  return (
+    <div className="rounded-xl border border-dashed border-[#cfd7e6] bg-white px-6 py-12 text-center">
+      <FileSearch size={32} className="mx-auto text-[#c3cbda]" />
+      <p className="mt-3 text-sm font-semibold text-ink">No records match these filters</p>
+      <p className="mx-auto mt-1 max-w-sm text-[13px] text-mute">Try a longer period, clear the search, or add a new record.</p>
+      <button type="button" onClick={onAdd} className={`${btnPrimary} mt-4`}>
+        Add record
+      </button>
     </div>
   );
 }

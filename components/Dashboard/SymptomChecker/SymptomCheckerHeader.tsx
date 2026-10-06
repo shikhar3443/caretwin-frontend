@@ -1,37 +1,20 @@
 "use client";
 
 import { Activity } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
 
 export default function SymptomCheckerHeader() {
   return (
-    <div>
-      <div className="flex items-center gap-3">
-
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#e6f6ef] text-[#15965d]">
-          <Activity size={20} />
-        </div>
-
-        <div>
-          <h1 className="text-[25px] font-bold tracking-[-0.5px] text-[#111827]">
-            AI Symptom Checker
-          </h1>
-
-          <p className="mt-1 text-[11px] text-[#6b7280]">
-            Describe your symptoms and get AI-powered guidance based on your
-            health history.
-          </p>
-        </div>
-
-      </div>
-
-      <div className="mt-5 rounded-lg border border-[#d9eee3] bg-[#f0fbf5] px-4 py-3">
-        <p className="text-[10px] font-semibold text-[#16734d]">
-          AI Health Assistant
-        </p>
-
-        <p className="mt-1 text-[9px] leading-[14px] text-[#4f7c67]">
-          This tool provides health guidance and is not a replacement for
-          professional medical advice.
+    <div className="space-y-4">
+      <PageHeader
+        icon={<Activity size={22} />}
+        title="AI Symptom Checker"
+        subtitle="Describe your symptoms and get guidance based on your health history."
+      />
+      <div className="rounded-lg border border-[#d9eee3] bg-[#f0fbf5] px-4 py-3">
+        <p className="text-[13px] font-semibold text-[#16734d]">AI health assistant</p>
+        <p className="mt-0.5 text-[13px] leading-5 text-[#4f7c67]">
+          This tool provides general guidance and is not a replacement for professional medical advice. In an emergency, call your local emergency number.
         </p>
       </div>
     </div>

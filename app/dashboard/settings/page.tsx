@@ -1,199 +1,189 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { getCurrentUser } from "@/lib/api";
+import { useState } from "react";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import { User, Lock, ShieldCheck, Bell, Download, Trash2, Monitor, Smartphone } from "lucide-react";
+
+import PageHeader from "@/components/ui/PageHeader";
+import ConfirmModal from "@/components/shared/ConfirmModal";
+import { TextInput, Toggle, btnGhost, btnPrimary } from "@/components/ui/Field";
+import { useToast } from "@/components/ui/Toast";
+import { Stagger, StaggerItem } from "@/components/ui/Motion";
+import { clearAllCareTwinData } from "@/lib/store";
+import { downloadText } from "@/lib/download";
+import { useCareData } from "@/lib/useCareData";
+import type { Prefs } from "@/lib/types";
+
+const TABS = [
+  { id: "Account", icon: User },
+  { id: "Security", icon: Lock },
+  { id: "Health Data & Privacy", icon: ShieldCheck },
+  { id: "Notifications", icon: Bell },
+] as const;
+type Tab = (typeof TABS)[number]["id"];
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState("Profile");
-  const [user, setUser] = useState<{ full_name: string; email: string } | null>(null);
+  const toast = useToast();
+  const { hydrated, self, account, prefs, setPrefs, members, records } = useCareData();
+  const [tab, setTab] = useState<Tab>("Account");
+  const [confirmErase, setConfirmErase] = useState(false);
+  const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
+  const [pwErr, setPwErr] = useState<Partial<typeof pw>>({});
 
-  useEffect(() => {
-    async function loadUser() {
-      try {
-        const u = await getCurrentUser();
-        setUser(u);
-      } catch (err) {
-        console.error("Failed to load user settings:", err);
-      }
-    }
-    loadUser();
-  }, []);
+  const toggle = (k: keyof Prefs) => (v: boolean) => {
+    setPrefs({ ...prefs, [k]: v });
+    toast("Preference saved");
+  };
 
-  const nameParts = user?.full_name ? user.full_name.split(" ") : ["User", ""];
-  const firstName = nameParts[0] || "User";
-  const lastName = nameParts.slice(1).join(" ") || "";
+  const changePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    const err: Partial<typeof pw> = {};
+    if (!pw.current) err.current = "Enter your current password.";
+    if (pw.next.length < 8) err.next = "Use at least 8 characters.";
+    if (pw.confirm !== pw.next) err.confirm = "Passwords do not match.";
+    setPwErr(err);
+    if (Object.keys(err).length) return;
+    setPw({ current: "", next: "", confirm: "" });
+    toast("Password updated (demo: not stored)", "info");
+  };
+
+  const exportData = () => {
+    downloadText("caretwin-export.json", JSON.stringify({ exportedAt: new Date().toISOString(), members, records, prefs }, null, 2));
+    toast("Data exported");
+  };
 
   return (
-    <div className="min-h-screen bg-[#F5F7FF] p-6 md:p-10">
+    <Stagger className="mx-auto w-full max-w-[1000px] space-y-5">
+      <StaggerItem>
+        <PageHeader icon={<User size={22} />} title="Settings" subtitle="Manage your account, security and privacy." />
+      </StaggerItem>
 
-      <div className="max-w-6xl mx-auto">
-
-        <h1 className="text-4xl font-bold text-slate-900 mb-8">
-          Settings
-        </h1>
-
-        <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-8">
-
-          {/* Settings navigation */}
-
-          <div className="space-y-2">
-
-            {[
-              "Profile",
-              "Security",
-              "Health Data & Privacy",
-              "Notifications",
-            ].map((item) => (
+      <StaggerItem>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[240px_1fr]">
+          <div role="tablist" aria-label="Settings sections" aria-orientation="vertical" className="flex gap-1 overflow-x-auto lg:flex-col">
+            {TABS.map(({ id, icon: Icon }) => (
               <button
-                key={item}
-                onClick={() => setActiveTab(item)}
-                className={`w-full text-left px-5 py-3 rounded-xl transition ${
-                  activeTab === item
-                    ? "bg-[#DCE8FA] text-[#006B9F] font-semibold"
-                    : "hover:bg-white text-slate-700"
+                key={id}
+                role="tab"
+                aria-selected={tab === id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={`relative flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-xl px-4 py-3 text-left text-sm transition-colors ${
+                  tab === id ? "font-semibold text-brand" : "text-body hover:bg-white"
                 }`}
               >
-                {item}
-
-                {activeTab === item && (
-                  <span className="float-right text-xs bg-[#006B9F] text-white px-2 py-0.5 rounded-full">
-                    Active
-                  </span>
-                )}
+                {tab === id && <motion.span layoutId="settings-tab" className="absolute inset-0 rounded-xl bg-[#DCE8FA]" transition={{ type: "spring", stiffness: 420, damping: 34 }} />}
+                <Icon size={17} className="relative" />
+                <span className="relative">{id}</span>
               </button>
             ))}
-
           </div>
 
+          <motion.div key={tab} role="tabpanel" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22 }} className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
+            <div className="border-b border-line p-5 sm:p-6">
+              <h2 className="text-xl font-bold text-ink">{tab}</h2>
+            </div>
 
-          {/* Main content */}
-
-          <div className="bg-white rounded-3xl shadow-sm border border-slate-200">
-
-            <div className="p-8">
-
-              <h2 className="text-2xl font-bold text-slate-900 mb-2">
-                Personal Information
-              </h2>
-
-              <p className="text-slate-500 mb-8">
-                Manage your personal details and account settings.
-              </p>
-
-
-              {/* Profile */}
-
-              <div className="flex items-center gap-5 mb-8">
-
-                <div className="w-24 h-24 rounded-full bg-slate-100 flex items-center justify-center text-3xl">
-                  👤
+            <div className="p-5 sm:p-6">
+              {tab === "Account" && (
+                <div className="space-y-5">
+                  <dl className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <dt className="text-xs font-semibold text-mute">Name</dt>
+                      <dd className="mt-1 font-semibold text-ink">{hydrated ? self.name : "…"}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs font-semibold text-mute">Email</dt>
+                      <dd className="mt-1 break-all font-semibold text-ink">{hydrated ? account.email : "…"}</dd>
+                    </div>
+                  </dl>
+                  <p className="text-sm text-body">Your name, photo, contact and health details are edited in one place.</p>
+                  <Link href="/dashboard/profile" className={btnPrimary}>
+                    Edit profile
+                  </Link>
                 </div>
+              )}
 
-                <div>
+              {tab === "Security" && (
+                <div className="space-y-8">
+                  <form onSubmit={changePassword} className="max-w-md space-y-4" noValidate>
+                    <TextInput label="Current password" type="password" autoComplete="current-password" value={pw.current} error={pwErr.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} />
+                    <TextInput label="New password" type="password" autoComplete="new-password" value={pw.next} error={pwErr.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} />
+                    <TextInput label="Confirm new password" type="password" autoComplete="new-password" value={pw.confirm} error={pwErr.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} />
+                    <button type="submit" className={btnPrimary}>Update password</button>
+                  </form>
 
-                  <h3 className="font-semibold text-slate-900">
-                    Profile Picture
-                  </h3>
-
-                  <p className="text-sm text-slate-500 mt-1">
-                    PNG, JPG up to 5MB.
-                  </p>
-
-                  <div className="flex gap-3 mt-3">
-
-                    <button className="px-4 py-2 rounded-lg bg-[#DCE8FA] text-[#006B9F] text-xs font-semibold">
-                      Upload New
-                    </button>
-
-                    <button className="px-4 py-2 text-red-600 text-xs font-semibold">
-                      Remove
-                    </button>
-
+                  <div className="divide-y divide-line border-t border-line">
+                    <Toggle checked={prefs.twoFactor} onChange={toggle("twoFactor")} label="Two-step verification" description="Ask for a code when signing in on a new device." />
                   </div>
 
+                  <div>
+                    <h3 className="text-sm font-bold text-ink">Signed-in devices</h3>
+                    <ul className="mt-3 space-y-2">
+                      {[
+                        { icon: Monitor, name: "This browser", note: "Active now" },
+                        { icon: Smartphone, name: "Phone", note: "Last active 2 days ago (sample)" },
+                      ].map((d) => (
+                        <li key={d.name} className="flex items-center gap-3 rounded-lg bg-[#f8f9fc] px-4 py-3 text-sm">
+                          <d.icon size={18} className="text-brand" />
+                          <span className="font-semibold text-ink">{d.name}</span>
+                          <span className="text-mute">{d.note}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
+              )}
 
-              </div>
+              {tab === "Health Data & Privacy" && (
+                <div className="space-y-6">
+                  <div className="divide-y divide-line">
+                    <Toggle checked={prefs.shareWithAI} onChange={toggle("shareWithAI")} label="Use my records in AI answers" description="Lets the assistant read your records to personalise replies." />
+                    <Toggle checked={prefs.analytics} onChange={toggle("analytics")} label="Share anonymous usage data" description="Helps us improve CareTwin. Never includes health details." />
+                  </div>
 
-
-              {/* Name */}
-
-              <div className="grid md:grid-cols-2 gap-5">
-
-                <div>
-
-                  <label className="block text-sm font-medium mb-2">
-                    First Name
-                  </label>
-
-                  <input
-                    type="text"
-                    key={firstName}
-                    defaultValue={firstName}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl outline-none focus:border-cyan-600 text-sm"
-                  />
-
+                  <div className="rounded-xl bg-[#f8f9fc] p-4">
+                    <p className="text-sm font-bold text-ink">Your data</p>
+                    <p className="mt-1 text-[13px] leading-5 text-mute">
+                      {hydrated ? `${members.length} people and ${records.length} records are stored on this device.` : ""} Export a copy, or erase everything.
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button type="button" className={btnGhost} onClick={exportData}>
+                        <Download size={16} /> Export my data
+                      </button>
+                      <button type="button" className="inline-flex items-center gap-2 rounded-lg border border-[#f3b5b5] bg-white px-4 py-2.5 text-sm font-semibold text-danger transition hover:bg-[#fff4f4]" onClick={() => setConfirmErase(true)}>
+                        <Trash2 size={16} /> Erase all data
+                      </button>
+                    </div>
+                  </div>
                 </div>
+              )}
 
-
-                <div>
-
-                  <label className="block text-sm font-medium mb-2">
-                    Last Name
-                  </label>
-
-                  <input
-                    type="text"
-                    key={lastName}
-                    defaultValue={lastName}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl outline-none focus:border-cyan-600 text-sm"
-                  />
-
+              {tab === "Notifications" && (
+                <div className="divide-y divide-line">
+                  <Toggle checked={prefs.notifyFollowUps} onChange={toggle("notifyFollowUps")} label="Follow-up reminders" description="Remind me about records marked for follow-up." />
+                  <Toggle checked={prefs.notifyReports} onChange={toggle("notifyReports")} label="Report summaries" description="Tell me when a periodic summary is ready." />
+                  <Toggle checked={prefs.notifyProduct} onChange={toggle("notifyProduct")} label="Product updates" description="New features and tips." />
+                  <Toggle checked={prefs.notifyEmail} onChange={toggle("notifyEmail")} label="Send notifications by email" />
                 </div>
-
-              </div>
-
-
-              {/* Email */}
-
-              <div className="mt-5">
-
-                <label className="block text-sm font-medium mb-2">
-                  Email Address
-                </label>
-
-                <input
-                  type="email"
-                  key={user?.email || "email"}
-                  defaultValue={user?.email || ""}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-xl outline-none focus:border-cyan-600 text-sm"
-                />
-
-              </div>
-
+              )}
             </div>
-
-
-            {/* Buttons */}
-
-            <div className="border-t border-slate-200 p-6 flex justify-end gap-3">
-
-              <button className="px-6 py-3 rounded-full border border-slate-300 text-sm">
-                Cancel
-              </button>
-
-              <button className="px-6 py-3 rounded-full bg-[#006B9F] hover:bg-[#00557f] text-white text-sm font-semibold transition">
-                Save Changes
-              </button>
-
-            </div>
-
-          </div>
-
+          </motion.div>
         </div>
+      </StaggerItem>
 
-      </div>
-
-    </div>
+      <ConfirmModal
+        open={confirmErase}
+        onClose={() => setConfirmErase(false)}
+        title="Erase all data?"
+        message="This removes every member, record and preference stored on this device and returns the app to its starting state. This cannot be undone."
+        confirmLabel="Erase everything"
+        onConfirm={() => {
+          clearAllCareTwinData();
+          window.location.href = "/dashboard";
+        }}
+      />
+    </Stagger>
   );
 }
