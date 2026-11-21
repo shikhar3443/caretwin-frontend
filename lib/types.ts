@@ -27,6 +27,7 @@ export interface MedicalRecord {
   metrics?: Metric[];
   followUp?: boolean;
   fileName?: string;
+  hasFile?: boolean;
   backendId?: number;
   ocrStatus?: string;
 }

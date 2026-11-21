@@ -227,13 +227,15 @@ export async function viewMedicalRecord(recordId: number) {
 // 🔬 OCR & Medical NLP APIs
 // ----------------------------------------------------
 
-export async function processRecordOCR(recordId: number, rawTextInput?: string) {
+export async function processRecordOCR(recordId: number | string, rawTextInput?: string): Promise<any> {
   return apiFetch(`/ocr/process/${recordId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ raw_text_input: rawTextInput }),
   });
 }
+
+export const getRecordOcr = processRecordOCR;
 
 // ----------------------------------------------------
 // 📈 Health Timeline & Dashboard Analytics APIs
@@ -342,5 +344,52 @@ export async function revokeEmergencyQR(memberId: number) {
 
 export async function getEmergencyAccessLog(memberId: number) {
   return apiFetch(`/emergency/${memberId}/access-log`);
+}
+
+// ----------------------------------------------------
+// 🧠 AI Health Twin & Mortality Risk Prediction APIs
+// ----------------------------------------------------
+
+export type ApiPredictionSchema = {
+  predictionWindowHours: number;
+  labs: Record<string, { unit: string; min: number; max: number }>;
+  categories: Record<string, string[]>;
+};
+
+export type ApiMortalityInput = {
+  age: number;
+  gender?: "F" | "M";
+  admissionDate?: string;
+  admissionTime?: string;
+  admissionType?: string;
+  admissionLocation?: string;
+  insurance?: string;
+  language?: string;
+  maritalStatus?: string;
+  race?: string;
+  labs: Record<string, number[]>;
+};
+
+export type ApiMortalityResult = {
+  probability: number;
+  threshold: number;
+  flagged: boolean;
+  riskLevel: "elevated" | "lower";
+  predictionWindowHours: number;
+  target?: string;
+  warnings: string[];
+  disclaimer: string;
+};
+
+export async function getPredictionSchema() {
+  return apiFetch<ApiPredictionSchema>("/predictions/schema");
+}
+
+export async function predictMortality(input: ApiMortalityInput) {
+  return apiFetch<{ result: ApiMortalityResult }>("/predictions/mortality", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
 }
 

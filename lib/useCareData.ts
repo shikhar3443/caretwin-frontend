@@ -62,6 +62,22 @@ export function useCareData() {
     [records, safeActiveId],
   );
 
+  const updateRecord = (id: string, updates: Partial<MedicalRecord>) => {
+    setRecords((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, ...updates } : r))
+    );
+  };
+
+  const user = useMemo(() => ({
+    name: self.name,
+    email: account.email,
+    dateOfBirth: self.dob,
+    gender: self.gender,
+  }), [account, self]);
+
+  const recordsState = { status: hydrated ? "ready" : "loading" };
+  const familyState = { status: hydrated ? "ready" : "loading" };
+
   return {
     hydrated,
     now,
@@ -78,6 +94,10 @@ export function useCareData() {
     setPrefs,
     self,
     memberById,
+    user,
+    recordsState,
+    familyState,
+    updateRecord,
   };
 }
 
