@@ -1,11 +1,17 @@
 # CareTwin Frontend 🌐🩺
 ### *Modern, AI-Enhanced Personal Healthcare Dashboard & Emergency Response System*
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-caretwin--frontend.vercel.app-0070F3.svg?style=for-the-badge&logo=vercel)](https://caretwin-frontend.vercel.app/)
 [![Next.js](https://img.shields.io/badge/Next.js-15+-black.svg?style=flat&logo=next.js)](https://nextjs.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg?style=flat&logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6.svg?style=flat&logo=typescript)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC.svg?style=flat&logo=tailwind-css)](https://tailwindcss.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+---
+
+> 🚀 **Live Production Application:** [https://caretwin-frontend.vercel.app/](https://caretwin-frontend.vercel.app/)  
+> 🔗 **Connected Live API (Render):** [https://caretwin-backend-qkql.onrender.com/docs](https://caretwin-backend-qkql.onrender.com/docs)
 
 ---
 
