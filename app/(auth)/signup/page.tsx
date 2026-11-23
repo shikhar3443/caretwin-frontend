@@ -10,6 +10,8 @@ import { useCareData } from "@/lib/useCareData";
 
 import { registerUser, loginUser } from "@/lib/api";
 
+import { MEMBER_COLORS } from "@/lib/data";
+
 function strength(pw: string) {
   let s = 0;
   if (pw.length >= 8) s++;
@@ -24,7 +26,7 @@ const colors = ["bg-slate-200", "bg-red-400", "bg-amber-400", "bg-lime-500", "bg
 
 export default function SignupPage() {
   const router = useRouter();
-  const { members, setMembers, account, setAccount } = useCareData();
+  const { members, setMembers, setRecords, account, setAccount } = useCareData();
   const [form, setForm] = useState({ name: "", email: "", password: "", confirmPassword: "" });
   const [show, setShow] = useState(false);
   const [errors, setErrors] = useState<Partial<typeof form> & { general?: string }>({});
@@ -50,9 +52,30 @@ export default function SignupPage() {
       // 2. Automatically log in to get JWT token
       await loginUser(form.email.trim(), form.password);
 
-      // Save local cache for immediate display
-      setMembers(members.map((m) => (m.id === "self" ? { ...m, name: form.name.trim() } : m)));
+      // Save fresh clean profile for the new user
+      setMembers([{
+        id: "self",
+        name: form.name.trim(),
+        relation: "Self",
+        dob: "",
+        gender: "",
+        bloodGroup: "",
+        heightCm: "",
+        weightKg: "",
+        allergies: [],
+        conditions: [],
+        medications: [],
+        primaryDoctor: "",
+        insurance: "",
+        organDonor: false,
+        contacts: [],
+        color: MEMBER_COLORS[0],
+      }]);
+      setRecords([]);
       setAccount({ ...account, email: form.email.trim() });
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("ct:records");
+      }
 
       router.push("/dashboard");
     } catch (err: any) {
