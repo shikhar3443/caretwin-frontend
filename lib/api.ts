@@ -1,6 +1,7 @@
 // CareTwin API Client for connecting Next.js Frontend to FastAPI Backend
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const rawApiUrl = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").trim().replace(/\/+$/, "");
+const API_BASE_URL = rawApiUrl.endsWith("/api/v1") ? rawApiUrl : `${rawApiUrl}/api/v1`;
 
 export function getAuthToken(): string | null {
   if (typeof window !== "undefined") {
