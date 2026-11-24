@@ -238,7 +238,19 @@ function RecordsView() {
         }}
       />
 
-      <RecordDetailModal record={detail} member={detail ? memberById.get(detail.memberId) : undefined} onClose={() => setDetail(null)} onDownload={download} />
+      <RecordDetailModal
+        record={detail}
+        member={detail ? memberById.get(detail.memberId) : undefined}
+        onClose={() => setDetail(null)}
+        onDownload={download}
+        onUpdate={(updates) => {
+          if (!detail) return;
+          const updated = { ...detail, ...updates };
+          setDetail(updated);
+          setRecords((prev) => prev.map((r) => (r.id === detail.id ? updated : r)));
+          toast("Record updated with AI analysis");
+        }}
+      />
 
       <ConfirmModal
         open={!!toDelete}

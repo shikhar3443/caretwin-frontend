@@ -42,6 +42,18 @@ export function useCareData() {
         }
       })
       .catch(() => null);
+
+    setRecords((prev) =>
+      prev.map((r) => {
+        if (!r.analysis && (r.backendId || r.fileName)) {
+          return {
+            ...r,
+            analysis: "Document stored in medical locker. Click View to run or view AI OCR analysis.",
+          };
+        }
+        return r;
+      })
+    );
   }, [hydrated]);
 
   // If the active member was deleted, fall back to everyone.

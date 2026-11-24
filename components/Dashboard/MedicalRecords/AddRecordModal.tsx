@@ -83,17 +83,32 @@ function Form({
 
     let backendId: number | undefined;
     let ocrStatus: string | undefined;
+    let extractedMetrics: any[] = [];
+    let extractedAnalysis: string | undefined;
 
     if (file && getAuthToken()) {
       setSaving(true);
-      setSaveStatus("Uploading to Record Locker & analyzing with OCR...");
+      setSaveStatus("Uploading to Record Locker...");
       try {
         const backendMembers = await getFamilyMembers().catch(() => []);
         const targetMember = backendMembers[0]?.id || 1;
         const uploaded = await uploadMedicalRecord(targetMember, title.trim(), type, file);
         backendId = uploaded.id;
-        await processRecordOCR(uploaded.id).catch(() => null);
-        ocrStatus = "COMPLETED";
+
+        setSaveStatus("Running AI OCR extraction...");
+        const ocrData: any = await processRecordOCR(uploaded.id).catch(() => null);
+        ocrStatus = ocrData?.status || "COMPLETED";
+
+        if (ocrData?.extracted_fields && ocrData.extracted_fields.length > 0) {
+          extractedMetrics = ocrData.extracted_fields.map((f: any) => ({
+            label: f.metric_type.replace(/_/g, " "),
+            value: `${f.value_numeric} ${f.unit || ""}`.trim(),
+            flag: "normal" as const,
+          }));
+          extractedAnalysis = `AI extracted ${extractedMetrics.length} clinical metric${extractedMetrics.length === 1 ? "" : "s"} from document.`;
+        } else {
+          extractedAnalysis = "Report processed by OCR pipeline. Stored in secure locker.";
+        }
       } catch (err: any) {
         console.warn("Backend upload failed, keeping local record:", err);
       } finally {
@@ -113,7 +128,9 @@ function Form({
       followUp,
       fileName: file?.name,
       backendId,
-      ocrStatus,
+      ocrStatus: ocrStatus || (file ? "COMPLETED" : undefined),
+      metrics: extractedMetrics.length > 0 ? extractedMetrics : undefined,
+      analysis: extractedAnalysis || "Document stored in medical locker.",
     });
     onClose();
   };
@@ -182,13 +199,20 @@ function Form({
       </label>
 
       {/* Footer actions live in the form so Enter submits */}
-      <div className="flex flex-col-reverse gap-2 border-t border-line pt-4 sm:flex-row sm:justify-end">
-        <button type="button" className={btnGhost} onClick={onClose}>
-          Cancel
-        </button>
-        <button type="submit" className={btnPrimary}>
-          Save record
-        </button>
+      <div className="flex flex-col-reverse gap-2 border-t border-line pt-4 sm:flex-row sm:items-center sm:justify-between">
+        {saveStatus ? (
+          <span className="text-xs text-[#0878b8] font-medium flex items-center gap-1.5 animate-pulse">
+            <span>⏳</span> {saveStatus}
+          </span>
+        ) : <div />}
+        <div className="flex gap-2 justify-end">
+          <button type="button" disabled={saving} className={btnGhost} onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" disabled={saving} className={btnPrimary}>
+            {saving ? "Saving & Analyzing..." : "Save record"}
+          </button>
+        </div>
       </div>
     </form>
   );

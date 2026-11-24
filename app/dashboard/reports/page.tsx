@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ClipboardList, Sparkles, Printer, Copy, Download, BellRing, CheckCircle2, Loader2, TriangleAlert } from "lucide-react";
 
@@ -36,6 +36,19 @@ export default function ReportsPage() {
   );
   const scope = activeId === ALL_ID ? "Your family" : (memberById.get(activeId)?.name ?? "");
   const range = periodLabel(period, now);
+
+  // Auto-generate summary when records exist so user doesn't see a blank placeholder
+  useEffect(() => {
+    if (hydrated && inRange.length > 0 && !result && step === -1) {
+      setResult({
+        summary: buildSummary(inRange, members, scope, range),
+        scope,
+        range,
+        ids: inRange.map((r) => r.id),
+      });
+      setStep(3);
+    }
+  }, [hydrated, inRange, result, step, members, scope, range]);
 
   const generate = () => {
     setResult(null);

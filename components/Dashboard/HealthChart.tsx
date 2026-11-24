@@ -10,20 +10,31 @@ export default function HealthChart() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     async function loadTimeline() {
       try {
         setLoading(true);
-        const members = await getFamilyMembers();
-        const selfId = members[0]?.id || 1;
-        const data = await getHealthTimeline(selfId);
-        setMeasurements(data);
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout")), 8000)
+        );
+        const fetchPromise = (async () => {
+          const members = await getFamilyMembers();
+          const selfId = members[0]?.id || 1;
+          return await getHealthTimeline(selfId);
+        })();
+
+        const data = await Promise.race([fetchPromise, timeoutPromise]);
+        if (!cancelled) setMeasurements(data || []);
       } catch (err) {
-        console.error("Failed to load health timeline:", err);
+        console.warn("Could not load health timeline from backend:", err);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     loadTimeline();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const filtered = measurements.filter((m) => m.metric_type === selectedMetric);

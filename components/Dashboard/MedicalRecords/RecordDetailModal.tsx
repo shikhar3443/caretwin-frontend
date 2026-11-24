@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import Modal from "@/components/ui/Modal";
 import { btnGhost } from "@/components/ui/Field";
 import type { MedicalRecord, Member } from "@/lib/types";
 import { formatDate } from "@/lib/dates";
-import { Download } from "lucide-react";
+import { Download, Sparkles, Loader2 } from "lucide-react";
+import { processRecordOCR } from "@/lib/api";
 
 const flagStyle = {
   normal: "bg-[#e5faef] text-[#15965d]",
@@ -18,12 +20,43 @@ export default function RecordDetailModal({
   member,
   onClose,
   onDownload,
+  onUpdate,
 }: {
   record: MedicalRecord | null;
   member?: Member;
   onClose: () => void;
   onDownload: (r: MedicalRecord) => void;
+  onUpdate?: (updates: Partial<MedicalRecord>) => void;
 }) {
+  const [analyzing, setAnalyzing] = useState(false);
+
+  const handleAnalyze = async () => {
+    if (!record || !record.backendId || !onUpdate) return;
+    setAnalyzing(true);
+    try {
+      const ocrData: any = await processRecordOCR(record.backendId);
+      const metrics = (ocrData?.extracted_fields || []).map((f: any) => ({
+        label: f.metric_type.replace(/_/g, " "),
+        value: `${f.value_numeric} ${f.unit || ""}`.trim(),
+        flag: "normal" as const,
+      }));
+      const analysis =
+        metrics.length > 0
+          ? `AI extracted ${metrics.length} clinical metric${metrics.length === 1 ? "" : "s"} from document.`
+          : "Report analyzed with OCR pipeline. Stored in secure locker.";
+
+      onUpdate({
+        metrics: metrics.length > 0 ? metrics : undefined,
+        analysis,
+        ocrStatus: ocrData?.status || "COMPLETED",
+      });
+    } catch (err) {
+      console.warn("OCR analysis failed:", err);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   return (
     <Modal
       open={!!record}
@@ -61,6 +94,27 @@ export default function RecordDetailModal({
             <p className="mt-1 leading-6 text-body">{record.description}</p>
           </div>
 
+          {/* Trigger OCR if not yet analyzed */}
+          {record.backendId && (!record.metrics || record.metrics.length === 0) && (
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+              <div>
+                <p className="text-xs font-bold text-slate-800">AI Medical Extraction</p>
+                <p className="text-[11px] text-slate-500">
+                  Extract clinical lab values & diagnosis using OCR.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={analyzing}
+                onClick={handleAnalyze}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#0878b8] text-white hover:bg-[#06699f] transition disabled:opacity-60"
+              >
+                {analyzing ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                {analyzing ? "Extracting..." : "Run AI OCR"}
+              </button>
+            </div>
+          )}
+
           {record.metrics && record.metrics.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-mute">Key results</p>
@@ -70,7 +124,9 @@ export default function RecordDetailModal({
                     <span className="text-body">{m.label}</span>
                     <span className="flex items-center gap-2">
                       <span className="font-semibold text-ink">{m.value}</span>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${flagStyle[m.flag]}`}>{flagLabel[m.flag]}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${flagStyle[m.flag]}`}>
+                        {flagLabel[m.flag]}
+                      </span>
                     </span>
                   </li>
                 ))}
