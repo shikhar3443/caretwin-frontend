@@ -58,7 +58,7 @@ export function useCareData() {
           date: br.upload_date ? br.upload_date.split("T")[0] : new Date().toISOString().split("T")[0],
           doctor: br.diagnosis ? `Diagnosed: ${br.diagnosis}` : "Clinic / Hospital",
           description: br.diagnosis ? `Primary diagnosis: ${br.diagnosis}` : "Medical document uploaded to locker.",
-          fileName: br.original_filename || (br.file_path ? br.file_path.split(/[/\\]/).pop() : "document.pdf"),
+          fileName: br.file_path ? br.file_path.split(/[/\\]/).pop() : "document.pdf",
           hasFile: true,
           ocrStatus: br.ocr_status || "COMPLETED",
           analysis: (br.measurements && br.measurements.length > 0)

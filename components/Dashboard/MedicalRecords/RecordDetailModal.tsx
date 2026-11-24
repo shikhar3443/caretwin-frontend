@@ -5,7 +5,7 @@ import Modal from "@/components/ui/Modal";
 import { btnGhost } from "@/components/ui/Field";
 import type { MedicalRecord, Member } from "@/lib/types";
 import { formatDate } from "@/lib/dates";
-import { Sparkles, Loader2, FileText } from "lucide-react";
+import { Download, Sparkles, Loader2 } from "lucide-react";
 import { processRecordOCR } from "@/lib/api";
 
 const flagStyle = {
@@ -65,25 +65,19 @@ export default function RecordDetailModal({
       description={record ? `${record.type} · ${formatDate(record.date)}` : undefined}
       footer={
         record && (
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              className={btnGhost}
-              onClick={() => onDownload(record)}
-              title="Download text summary of metrics & doctor notes"
-            >
-              <FileText size={14} /> Summary (.txt)
+          <>
+            <button type="button" className={btnGhost} onClick={() => onDownload(record)}>
+              <Download size={15} /> Download summary
             </button>
             <button type="button" className={btnGhost} onClick={onClose}>
               Close
             </button>
-          </div>
+          </>
         )
       }
     >
       {record && (
         <div className="space-y-5 text-sm">
-          {/* Patient & Doctor Metadata */}
           <dl className="grid grid-cols-2 gap-4">
             <div>
               <dt className="text-xs font-semibold text-mute">Patient</dt>
@@ -95,7 +89,6 @@ export default function RecordDetailModal({
             </div>
           </dl>
 
-          {/* Notes */}
           <div>
             <p className="text-xs font-semibold text-mute">Notes</p>
             <p className="mt-1 leading-6 text-body">{record.description}</p>
@@ -122,7 +115,6 @@ export default function RecordDetailModal({
             </div>
           )}
 
-          {/* Key Results / Metrics */}
           {record.metrics && record.metrics.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-mute">Key results</p>
@@ -142,13 +134,14 @@ export default function RecordDetailModal({
             </div>
           )}
 
-          {/* AI Insight */}
           {record.analysis && (
             <div className="rounded-lg bg-mint-soft p-3.5">
               <p className="text-xs font-bold text-[#15965d]">AI insight</p>
               <p className="mt-1 leading-6 text-[#317354]">{record.analysis}</p>
             </div>
           )}
+
+          {record.fileName && <p className="text-xs text-mute">Attached file: {record.fileName}</p>}
         </div>
       )}
     </Modal>
