@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { usePersistentState, useHydrated, useNow } from "./store";
-import { getCurrentUser, getAuthToken } from "./api";
+import { getCurrentUser, getMedicalRecords, getFamilyMembers, getAuthToken } from "./api";
 import {
   SEED_ACCOUNT,
   SEED_MEMBERS,
@@ -29,9 +29,10 @@ export function useCareData() {
     [members],
   );
 
-  // Sync real authenticated user profile from FastAPI backend if logged in
+  // Sync real authenticated user profile & permanent records from FastAPI backend
   useEffect(() => {
     if (!hydrated || !getAuthToken()) return;
+
     getCurrentUser()
       .then((u) => {
         if (u && (account.email !== u.email || self.name !== u.full_name)) {
@@ -43,17 +44,50 @@ export function useCareData() {
       })
       .catch(() => null);
 
-    setRecords((prev) =>
-      prev.map((r) => {
-        if (!r.analysis && (r.backendId || r.fileName)) {
-          return {
-            ...r,
-            analysis: "Document stored in medical locker. Click View to run or view AI OCR analysis.",
-          };
-        }
-        return r;
+    // Fetch permanent uploaded records from PostgreSQL database
+    getMedicalRecords()
+      .then((backendRecs: any[]) => {
+        if (!backendRecs || backendRecs.length === 0) return;
+
+        const mapped: MedicalRecord[] = backendRecs.map((br: any) => ({
+          id: `backend-${br.id}`,
+          backendId: br.id,
+          memberId: SELF_ID,
+          title: br.title,
+          type: (br.document_type || "Laboratory") as any,
+          date: br.upload_date ? br.upload_date.split("T")[0] : new Date().toISOString().split("T")[0],
+          doctor: br.diagnosis ? `Diagnosed: ${br.diagnosis}` : "Clinic / Hospital",
+          description: br.diagnosis ? `Primary diagnosis: ${br.diagnosis}` : "Medical document uploaded to locker.",
+          fileName: br.file_path ? br.file_path.split(/[/\\]/).pop() : "document.pdf",
+          hasFile: true,
+          ocrStatus: br.ocr_status || "COMPLETED",
+          analysis: (br.measurements && br.measurements.length > 0)
+            ? `AI extracted ${br.measurements.length} clinical metric(s) via OCR.`
+            : "Document analyzed with OCR pipeline. Stored in medical locker.",
+          metrics: (br.measurements || []).map((m: any) => ({
+            label: m.metric_type.replace(/_/g, " "),
+            value: `${m.value_numeric} ${m.unit || ""}`.trim(),
+            flag: "normal" as const,
+          })),
+        }));
+
+        setRecords((prev) => {
+          const map = new Map<string, MedicalRecord>();
+          prev.forEach((r) => map.set(r.backendId ? `b-${r.backendId}` : r.id, r));
+          mapped.forEach((r) => {
+            const key = `b-${r.backendId}`;
+            const existing = map.get(key);
+            // Keep local richer metrics if present, otherwise use backend
+            if (existing && existing.metrics && existing.metrics.length > 0) {
+              map.set(key, { ...r, metrics: existing.metrics, analysis: existing.analysis });
+            } else {
+              map.set(key, r);
+            }
+          });
+          return Array.from(map.values());
+        });
       })
-    );
+      .catch(() => null);
   }, [hydrated]);
 
   // If the active member was deleted, fall back to everyone.

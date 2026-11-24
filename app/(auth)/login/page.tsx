@@ -28,9 +28,6 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await loginUser(email, password);
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("ct:records");
-      }
       router.push("/dashboard");
     } catch (err: any) {
       setErrors({ general: err.message || "Invalid email or password." });
