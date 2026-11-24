@@ -73,19 +73,24 @@ function RecordsView() {
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [scopedRecords, period, type, query, now, memberById]);
 
+  // Download the ORIGINAL file from the server (card's Download button)
   const download = async (r: MedicalRecord) => {
     if (r.backendId) {
       try {
-        toast("Downloading original report...");
         await downloadMedicalRecord(r.backendId, r.fileName || `${slug(r.title)}.pdf`);
-        return;
+        toast("Original report downloaded");
       } catch (err) {
         console.warn("Backend download failed:", err);
-        toast("Could not download original report file from server", "error");
-        return;
+        toast("Could not download original report from server", "error");
       }
+      return;
     }
-    // No backend record — download local text summary
+    // No backend record — fall back to text summary
+    downloadSummary(r);
+  };
+
+  // Always generate a local .txt summary (modal's Summary button)
+  const downloadSummary = (r: MedicalRecord) => {
     const m = memberById.get(r.memberId);
     const lines = [
       r.title,
@@ -245,7 +250,7 @@ function RecordsView() {
         record={detail}
         member={detail ? memberById.get(detail.memberId) : undefined}
         onClose={() => setDetail(null)}
-        onDownload={download}
+        onDownload={downloadSummary}
         onUpdate={(updates) => {
           if (!detail) return;
           const updated = { ...detail, ...updates };
